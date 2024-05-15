@@ -107,3 +107,52 @@ from ControllerToTestConfig config, ControlFlowGraph::ControlFlowNode source, Co
 where config.hasFlow(source, sink)
 select sink, "Control flow from controller to test() function detected, potential risk."
 ```
+
+## 带净化函数，带入口识别
+```
+很好，再写一条规则：对于java语言，从所有带@controller注解的函数出发，如果有控制流未经过secure()函数，执行到了test()函数，那么就算风险，提示出来。
+```
+
+```
+import java
+import semmle.code.java.dataflow.ControlFlowGraph
+
+/**
+ * @name Unsecured flow from @Controller to test() function
+ * @description Identifies control flow paths from @Controller annotated methods to the test() function without passing through secure() function, which might indicate a security risk.
+ * @kind path-problem
+ * @id java/controller-to-test-unsecured
+ */
+
+class ControllerToTestConfig extends ControlFlowGraph::Configuration {
+  ControllerToTestConfig() { this = "ControllerToTestConfig" }
+
+  override predicate isSource(ControlFlowGraph::ControlFlowNode source) {
+    // Consider any method with @Controller annotation as a source
+    exists(Method m | 
+      m.hasAnnotation("Controller") and
+      source.getNode() = m
+    )
+  }
+
+  override predicate isSink(ControlFlowGraph::ControlFlowNode sink) {
+    // Define the sink as any call to the test() function
+    exists(MethodAccess ma |
+      ma.getMethod().hasName("test") and
+      sink.getNode() = ma
+    )
+  }
+
+  override predicate isBarrier(ControlFlowGraph::ControlFlowNode barrier) {
+    // Define secure() function as a barrier
+    exists(MethodAccess ma |
+      ma.getMethod().hasName("secure") and
+      barrier.getNode() = ma
+    )
+  }
+}
+
+from ControllerToTestConfig config, ControlFlowGraph::ControlFlowNode source, ControlFlowGraph::ControlFlowNode sink
+where config.hasFlow(source, sink)
+select sink, "Control flow from @Controller to test() function detected without passing through secure(), potential risk."
+```
