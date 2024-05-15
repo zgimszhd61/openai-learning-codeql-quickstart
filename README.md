@@ -65,3 +65,45 @@ from TestFunctionConfig config, DataFlow::Node source, DataFlow::Node sink
 where config.hasFlow(source, sink)
 select sink, source, "Data flows into test() function from here."
 ```
+
+## 写控制流图
+```
+很好，再写一条规则：对于java语言，从controller出发，如果有控制流执行到test()，那么就算风险，提示出来
+```
+
+### 返回结果
+```
+import java
+import semmle.code.java.dataflow.ControlFlowGraph
+
+/**
+ * @name Control flow from controller to test() function
+ * @description Identifies control flow paths from controller classes to the test() function, which might indicate a risk.
+ * @kind path-problem
+ * @id java/controller-to-test-risk
+ */
+
+class ControllerToTestConfig extends ControlFlowGraph::Configuration {
+  ControllerToTestConfig() { this = "ControllerToTestConfig" }
+
+  override predicate isSource(ControlFlowGraph::ControlFlowNode source) {
+    // Consider any method in a controller class as a source
+    exists(Method m | 
+      m.getDeclaringType().getName().matches("%Controller") and
+      source.getNode() = m
+    )
+  }
+
+  override predicate isSink(ControlFlowGraph::ControlFlowNode sink) {
+    // Define the sink as any call to the test() function
+    exists(MethodAccess ma |
+      ma.getMethod().hasName("test") and
+      sink.getNode() = ma
+    )
+  }
+}
+
+from ControllerToTestConfig config, ControlFlowGraph::ControlFlowNode source, ControlFlowGraph::ControlFlowNode sink
+where config.hasFlow(source, sink)
+select sink, "Control flow from controller to test() function detected, potential risk."
+```
